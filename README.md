@@ -154,6 +154,28 @@ If tokens aren't refreshing properly:
 
 ## Known Issues
 
+### Native Image Authentication Loop Bug
+
+**⚠️ Known Issue:** There is currently a bug with Quarkus OIDC Redis token state management in native images. Without the configuration changes below, the native image does not start correctly at all. Even with these changes applied, the native image will enter an authentication loop where:
+
+1. It redirects to Google OAuth for authentication
+2. After successful login, Google redirects back to the callback URL
+3. Instead of completing authentication, it immediately redirects back to Google again
+4. This creates an infinite redirect loop
+
+**Required Configuration for Native Image to Start:** The following configuration has been added to `application.properties` to allow the native image to start, but it does not resolve the authentication loop issue:
+
+```properties
+# Native image configuration for OIDC Redis serialization
+quarkus.jackson.fail-on-empty-beans=false
+quarkus.native.additional-build-args=--allow-incomplete-classpath,--report-unsupported-elements-at-runtime
+
+# Register OIDC Redis classes for reflection in native image
+quarkus.native.reflection.classes=io.quarkus.oidc.redis.token.state.manager.runtime.OidcRedisTokenStateManager$AuthorizationCodeTokensRecord,io.quarkus.oidc.AuthorizationCodeTokens,io.quarkus.oidc.AccessTokenCredential,io.quarkus.oidc.IdTokenCredential,io.quarkus.oidc.RefreshToken
+```
+
+**Status:** This project serves as a minimal reproduction example for reporting this issue to the Quarkus team. The application works correctly in JVM mode but fails in native image mode despite the above configuration attempts.
+
 ### Manual Token Deletion from Redis
 
 **⚠️ Important:** If you manually delete tokens from Redis while a session is active, it will cause a `NullPointerException` when the application tries to access the session:
